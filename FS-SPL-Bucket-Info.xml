@@ -1,0 +1,91 @@
+<dashboard version="1.1" theme="light">
+  <label>FS-SPL-Bucket-Info</label>
+  <fieldset submitButton="false">
+    <input type="time" token="timePicker">
+      <label>Timeperiod</label>
+      <default>
+        <earliest>-7d@h</earliest>
+        <latest>now</latest>
+      </default>
+    </input>
+    <input type="text" token="bucketGuid" searchWhenChanged="true">
+      <label>Bucket GUID</label>
+    </input>
+    <input type="text" token="bucketIdx">
+      <label>Index</label>
+    </input>
+    <input type="text" token="bucketNbr">
+      <label>Bucket #</label>
+    </input>
+  </fieldset>
+  <row>
+    <panel>
+      <title>Bucket replication status</title>
+      <table>
+        <search>
+          <query>| rest splunk_server=splunk-master.localhost /services/cluster/master/buckets 
+| search title=$bucketIdx$~$bucketNbr$~$bucketGuid$* 
+| rex field=title "^(?&lt;repl_index&gt;[^\~]+)" 
+| search repl_index="*" standalone=0 frozen=*
+| rename title AS bucketID 
+| fields bucketID peers.*.search_state *site* 
+| untable bucketID siteState value 
+| rex field=siteState "peers\.(?&lt;search_state&gt;[^\.]*?)\.search_state" 
+| rex field=siteState "\.(?&lt;primaries_by_site&gt;\S+)" 
+| rex field=siteState "\.(?&lt;rep_count_by_site&gt;\S+)" 
+| rex field=siteState "\.(?&lt;search_count_by_site&gt;\S+)" 
+| eval peerGUID=if(siteState=="primaries_by_site", value, peerGUID) 
+| eval site=if(siteState=="origin_site", value, site) 
+| eval value=if(siteState=="search_count_by_site", site + ":" + value, value) 
+| eval value=if(siteState=="rep_count_by_site", site + ":" + value, value) 
+| join type=outer peerGUID 
+    [ rest splunk_server=splunk-master.localhost /services/cluster/master/peers 
+    | fields active_* host* label title status site 
+    | eval PeerName= site + ":" + label + ":" + host_port_pair 
+    | rename title AS peerGUID 
+    | rename site AS peerSite 
+    | table peerGUID PeerName peerSite ] 
+| eval site=if(siteState=="search_state", peerSite, site) 
+| eval value=if(siteState=="primaries_by_site", PeerName + ":For_" + site, value) 
+| eval value=if(siteState=="search_state", PeerName + ":" + value, value) 
+| fields - PeerName peerGUID peerSite 
+| chart limit=0 values(value) over bucketID by siteState</query>
+          <earliest>-24h@h</earliest>
+          <latest>now</latest>
+          <sampleRatio>1</sampleRatio>
+        </search>
+        <option name="count">20</option>
+        <option name="dataOverlayMode">none</option>
+        <option name="drilldown">none</option>
+        <option name="percentagesRow">false</option>
+        <option name="rowNumbers">false</option>
+        <option name="totalsRow">false</option>
+        <option name="wrap">true</option>
+      </table>
+    </panel>
+  </row>
+  <row>
+    <panel>
+      <title>Bucket lifetime</title>
+      <table>
+        <search>
+          <query>index=_internal sourcetype="splunkd" source="*/splunkd.log" (*_$bucketNbr$_$bucketGuid$ OR hot_v1_$bucketNbr$ OR $bucketIdx$~$bucketNbr$~$bucketGuid$) $bucketIdx$
+| eval reason = coalesce(reason,Reason)
+| table _time host log_level peer peer_name component bucketType event event_message search_status reason from to status path  
+| sort +_time</query>
+          <earliest>$timePicker.earliest$</earliest>
+          <latest>$timePicker.latest$</latest>
+          <sampleRatio>1</sampleRatio>
+        </search>
+        <option name="count">20</option>
+        <option name="dataOverlayMode">none</option>
+        <option name="drilldown">none</option>
+        <option name="percentagesRow">false</option>
+        <option name="refresh.display">progressbar</option>
+        <option name="rowNumbers">false</option>
+        <option name="totalsRow">false</option>
+        <option name="wrap">true</option>
+      </table>
+    </panel>
+  </row>
+</dashboard>
