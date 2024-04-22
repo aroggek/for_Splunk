@@ -1,4 +1,6 @@
-<dashboard version="1.1" theme="light">
+``` Данный дашборд позволит узнать статус индексирования бакетов ```
+
+<form version="1.1" theme="dark">
   <label>FS-SPL-Bucket-Info</label>
   <fieldset submitButton="false">
     <input type="time" token="timePicker">
@@ -66,6 +68,35 @@
   </row>
   <row>
     <panel>
+      <title>Frozen buckets</title>
+      <table>
+        <search>
+          <query>| rest splunk_server=local /services/cluster/manager/fixup level=replication_factor 
+| table index title initial.reason latest.reason level 
+| append 
+    [| rest splunk_server=local /services/cluster/manager/fixup level=search_factor 
+    | table index title initial.reason latest.reason level ] 
+| join title 
+    [| rest splunk_server=local /services/cluster/manager/buckets f=title f=frozen search="frozen=0"] 
+| stats values(level) AS level values(frozen) AS frozen values(initial.reason) AS initial.reason values(latest.reason) AS latest.reason BY index title
+</query>
+          <earliest>$timePicker.earliest$</earliest>
+          <latest>$timePicker.latest$</latest>
+          <sampleRatio>1</sampleRatio>
+        </search>
+        <option name="count">20</option>
+        <option name="dataOverlayMode">none</option>
+        <option name="drilldown">none</option>
+        <option name="percentagesRow">false</option>
+        <option name="refresh.display">progressbar</option>
+        <option name="rowNumbers">false</option>
+        <option name="totalsRow">false</option>
+        <option name="wrap">true</option>
+      </table>
+    </panel>
+  </row>
+  <row>
+    <panel>
       <title>Bucket lifetime</title>
       <table>
         <search>
@@ -88,4 +119,4 @@
       </table>
     </panel>
   </row>
-</dashboard>
+</form>
